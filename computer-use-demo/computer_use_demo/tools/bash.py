@@ -1,10 +1,17 @@
 import asyncio
 import os
+import re
 from typing import ClassVar, Literal
 
 from anthropic.types.beta import BetaToolBash20241022Param
 
 from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult
+
+
+def sanitize_command(command: str) -> str:
+    # Remove trailing semicolons and whitespace
+    command = re.sub(r'[;\s]+$', '', command)
+    return command
 
 
 class _BashSession:
@@ -64,6 +71,8 @@ class _BashSession:
         assert self._process.stdin
         assert self._process.stdout
         assert self._process.stderr
+
+        command = sanitize_command(command)
 
         # send command to the process
         self._process.stdin.write(
