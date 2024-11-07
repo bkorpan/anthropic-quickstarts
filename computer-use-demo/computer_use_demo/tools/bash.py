@@ -24,6 +24,7 @@ class _BashSession:
     _output_delay: float = 0.2  # seconds
     _timeout: float = 120.0  # seconds
     _sentinel: str = "<<exit>>"
+    _syntax_error: str = "-bash: syntax error"
 
     def __init__(self):
         self._started = False
@@ -91,6 +92,8 @@ class _BashSession:
                     if self._sentinel in output:
                         # strip the sentinel and break
                         output = output[: output.index(self._sentinel)]
+                        break
+                    elif self._syntax_error in output:
                         break
         except asyncio.TimeoutError:
             self._timed_out = True
