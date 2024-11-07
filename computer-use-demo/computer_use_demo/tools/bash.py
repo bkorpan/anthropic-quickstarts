@@ -23,6 +23,11 @@ def sanitize_command(command: str) -> str:
     return command
 
 
+def contains_syntax_error(log: str) -> bool:
+    pattern = r"/bin/bash: line \d+: syntax error"
+    return bool(re.search(pattern, log))
+
+
 class _BashSession:
     """A session of a bash shell."""
 
@@ -33,7 +38,6 @@ class _BashSession:
     _output_delay: float = 1.0  # seconds
     _timeout: float = 120.0  # seconds
     _sentinel: str = "<<exit>>"
-    _syntax_error: str = "-bash: syntax error"
 
     def __init__(self):
         self._started = False
@@ -101,7 +105,7 @@ class _BashSession:
                         # strip the sentinel and break
                         output = output[: output.index(self._sentinel)]
                         break
-                    elif self._syntax_error in output:
+                    elif contains_syntax_error(error):
                         break
         except asyncio.TimeoutError:
             self._timed_out = True
@@ -145,8 +149,8 @@ class BashTool(BaseAnthropicTool):
                 self._session.stop()
             self._session = _BashSession()
             await self._session.start()
-
-            return ToolResult(system="tool has been restarted.")
+            if restart:
+                return ToolResult(system="tool has been restarted.")
 
         if self._session is None:
             self._session = _BashSession()
