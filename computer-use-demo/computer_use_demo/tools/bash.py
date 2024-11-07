@@ -1,11 +1,20 @@
 import asyncio
 import os
 import re
+import logging
 from typing import ClassVar, Literal
 
 from anthropic.types.beta import BetaToolBash20241022Param
 
 from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult
+
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(message)s",
+    filename="/home/computeruse/working_dir/logfile.log",  # Set the path here
+    filemode="w"  # Optional: 'w' for overwrite, 'a' for append
+)
 
 
 def sanitize_command(command: str) -> str:
@@ -21,7 +30,7 @@ class _BashSession:
     _process: asyncio.subprocess.Process
 
     command: str = "/bin/bash"
-    _output_delay: float = 0.2  # seconds
+    _output_delay: float = 1.0  # seconds
     _timeout: float = 120.0  # seconds
     _sentinel: str = "<<exit>>"
     _syntax_error: str = "-bash: syntax error"
@@ -63,10 +72,6 @@ class _BashSession:
                 system="tool must be restarted",
                 error=f"bash has exited with returncode {self._process.returncode}",
             )
-        if self._timed_out:
-            raise ToolError(
-                f"timed out: bash has not returned in {self._timeout} seconds and must be restarted",
-            )
 
         # we know these are not None because we created the process with PIPEs
         assert self._process.stdin
@@ -89,6 +94,9 @@ class _BashSession:
                     # if we read directly from stdout/stderr, it will wait forever for
                     # EOF. use the StreamReader buffer directly instead.
                     output = self._process.stdout._buffer.decode()  # pyright: ignore[reportAttributeAccessIssue]
+                    error = self._process.stderr._buffer.decode()  # pyright: ignore[reportAttributeAccessIssue]
+                    logging.debug(f"stdout: {output}")
+                    logging.debug(f"stderr: {error}")
                     if self._sentinel in output:
                         # strip the sentinel and break
                         output = output[: output.index(self._sentinel)]
@@ -98,7 +106,7 @@ class _BashSession:
         except asyncio.TimeoutError:
             self._timed_out = True
             raise ToolError(
-                f"timed out: bash has not returned in {self._timeout} seconds and must be restarted",
+                f"timed out: bash has not returned in {self._timeout} seconds and will be restarted",
             ) from None
 
         if output.endswith("\n"):
@@ -132,7 +140,7 @@ class BashTool(BaseAnthropicTool):
     async def __call__(
         self, command: str | None = None, restart: bool = False, **kwargs
     ):
-        if restart:
+        if restart or (self._session and self._session._timed_out):
             if self._session:
                 self._session.stop()
             self._session = _BashSession()
