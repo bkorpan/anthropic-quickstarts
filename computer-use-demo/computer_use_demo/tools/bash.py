@@ -86,7 +86,7 @@ class _BashSession:
 
         # send command to the process
         self._process.stdin.write(
-            command.encode() + f"; echo '{self._sentinel}'\n".encode()
+            "(".encode() + command.encode() + f"); echo '{self._sentinel}'\n".encode()
         )
         await self._process.stdin.drain()
 
